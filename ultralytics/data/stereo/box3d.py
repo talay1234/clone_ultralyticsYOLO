@@ -18,7 +18,7 @@ class Box3D:
         center_3d (tuple[float, float, float]): 3D center position (x, y, z) in meters.
             Coordinate system: Camera coordinate system (x: right, y: down, z: forward).
         dimensions (tuple[float, float, float]): Object dimensions (length, width, height) in meters.
-            length: forward, width: right, height: up.
+        length: forward, width: right, height: up.
         orientation (float): Rotation angle around vertical (Y) axis in radians, range [-π, π].
         class_label (str): Object class name ("Car", "Pedestrian", "Cyclist").
         class_id (int): Numeric class identifier (0=Car, 1=Pedestrian, 2=Cyclist).
@@ -44,7 +44,7 @@ class Box3D:
         if length <= 0 or width <= 0 or height <= 0:
             raise ValueError(f"Dimensions must be positive, got {self.dimensions}")
 
-        x, y, z = self.center_3d
+        _x, _y, z = self.center_3d
         if z <= 0:
             raise ValueError(f"Depth (z) must be positive, got z={z}")
 
@@ -96,4 +96,3 @@ class Box3D:
             truncated=data.get("truncated"),
             occluded=data.get("occluded"),
         )
-
