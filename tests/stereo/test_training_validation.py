@@ -2,18 +2,15 @@
 
 """Validation tests for stereo 3D detection training process."""
 
-import tempfile
 from pathlib import Path
 
 import numpy as np
 import pytest
 import torch
+from ultralytics.nn.modules.stereo.head import StereoCenterNetHead
 
 from ultralytics.cfg.models.stereo import load_stereo_config
-from ultralytics.data.stereo.calib import CalibrationParameters
 from ultralytics.models.yolo.stereo3ddet import Stereo3DDetTrainer
-from ultralytics.nn.modules.stereo.head import StereoCenterNetHead
-from ultralytics.utils import DEFAULT_CFG
 
 
 @pytest.fixture
@@ -159,14 +156,12 @@ class TestTrainingValidation:
 
     def test_progress_string_dynamic_loss_names(self):
         """Test T199: Verify progress_string() displays dynamically determined loss branch names correctly.
-        
+
         This test verifies:
         1. Format matches DetectionTrainer pattern: "Epoch", "GPU_mem", *loss_names, "Instances", "Size"
         2. Column count matches: 4 + len(loss_names)
         3. Loss names are dynamically determined (not hardcoded)
         """
-        from unittest.mock import MagicMock, patch
-
         # Expected loss names from stereo model
         expected_loss_names = (
             "heatmap",
@@ -189,29 +184,29 @@ class TestTrainingValidation:
             "save": False,
             "val": False,
         }
-        
+
         trainer = Stereo3DDetTrainer(overrides=overrides)
-        
+
         # Set loss_names dynamically (simulating T204 implementation)
         trainer.loss_names = expected_loss_names
-        
+
         # Get progress string
         progress_str = trainer.progress_string()
-        
+
         # Verify format matches DetectionTrainer pattern
         assert progress_str is not None, "progress_string() should return a string"
         assert isinstance(progress_str, str), "progress_string() should return a string"
-        
+
         # Verify required headers are present
         assert "Epoch" in progress_str, "Progress string should contain 'Epoch'"
         assert "GPU_mem" in progress_str, "Progress string should contain 'GPU_mem'"
         assert "Instances" in progress_str, "Progress string should contain 'Instances'"
         assert "Size" in progress_str, "Progress string should contain 'Size'"
-        
+
         # Verify all loss names are present
         for loss_name in expected_loss_names:
             assert loss_name in progress_str, f"Progress string should contain loss name: {loss_name}"
-        
+
         # Verify column count: 4 fixed columns + len(loss_names)
         # Format: ("\n" + "%11s" * (4 + len(self.loss_names))) % (...)
         expected_columns = 4 + len(expected_loss_names)
@@ -219,7 +214,7 @@ class TestTrainingValidation:
         # The string should have proper formatting for all columns
         lines = progress_str.strip().split("\n")
         assert len(lines) > 0, "Progress string should have at least one line"
-        
+
         # Verify the format string would produce correct number of columns
         # DetectionTrainer uses: ("\n" + "%11s" * (4 + len(self.loss_names)))
         format_str = "\n" + "%11s" * (4 + len(expected_loss_names))
@@ -254,19 +249,6 @@ class TestTrainingValidation:
         - Loss values are computed
         - Model weights are updated
         """
-        overrides = {
-            "task": "stereo3ddet",
-            "model": "ultralytics/cfg/models/stereo/stereo-centernet-s.yaml",
-            "data": mock_stereo_dataset,
-            "epochs": 1,
-            "imgsz": 384,
-            "batch": 2,
-            "workers": 0,
-            "save": False,
-            "plots": False,
-            "val": False,
-        }
-
         # This test would run actual training
         # trainer = Stereo3DDetTrainer(overrides=overrides)
         # trainer.train()
@@ -302,7 +284,7 @@ class TestTrainingValidation:
 
     def test_final_eval_converts_path_to_string(self, tmp_path):
         """Test that Stereo3DDetTrainer.final_eval converts Path to string before passing to validator.
-        
+
         This test verifies T161: final_eval should convert Path object to string for AutoBackend compatibility.
         """
         from unittest.mock import MagicMock, patch
@@ -357,13 +339,13 @@ class TestTrainingValidation:
 
     def test_loss_name_determination_from_model(self):
         """Test T198: Verify dynamic extraction of loss names from model's loss dictionary keys.
-        
+
         This test verifies that Stereo3DDetTrainer can extract loss names from:
         1. model.loss_names attribute if available
         2. model.loss() return value (loss_dict keys)
         3. Fallback to hardcoded list if model structure unknown
         """
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         # Expected loss names from stereo_yolo_v11.py:677-688
         expected_loss_names = (
@@ -388,30 +370,33 @@ class TestTrainingValidation:
             "save": False,
             "val": False,
         }
-        
+
         trainer = Stereo3DDetTrainer(overrides=overrides)
-        
+
         # Mock model with loss_names attribute
         mock_model = MagicMock()
         mock_model.loss_names = expected_loss_names
-        
+
         # Test extraction from loss_names attribute
         if hasattr(mock_model, "loss_names"):
             extracted_names = tuple(mock_model.loss_names)
-            assert extracted_names == expected_loss_names, f"Loss names mismatch: {extracted_names} != {expected_loss_names}"
-        
+            assert extracted_names == expected_loss_names, (
+                f"Loss names mismatch: {extracted_names} != {expected_loss_names}"
+            )
+
         # Test extraction from loss() return value (loss_dict keys)
         mock_loss_dict = {name: torch.tensor(1.0) for name in expected_loss_names}
         mock_model.loss = MagicMock(return_value=(torch.tensor(10.0), mock_loss_dict))
-        
+
         # Simulate calling loss() and extracting keys
         _, loss_dict = mock_model.loss()
         extracted_from_loss = tuple(sorted(loss_dict.keys()))
         expected_sorted = tuple(sorted(expected_loss_names))
-        assert extracted_from_loss == expected_sorted, f"Loss names from loss() mismatch: {extracted_from_loss} != {expected_sorted}"
-        
+        assert extracted_from_loss == expected_sorted, (
+            f"Loss names from loss() mismatch: {extracted_from_loss} != {expected_sorted}"
+        )
+
         # Verify trainer has loss_names attribute after initialization
         # (This will be set by T204 implementation)
         assert hasattr(trainer, "loss_names"), "Trainer should have loss_names attribute"
         assert isinstance(trainer.loss_names, (tuple, list)), "loss_names should be tuple or list"
-
