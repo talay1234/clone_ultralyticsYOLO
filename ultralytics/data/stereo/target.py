@@ -158,56 +158,47 @@ class TargetGenerator:
                 # vertex distance (distance from center to vertex in feature map space)
                 dx = vx_out - center_x_int
                 dy = vy_out - center_y_int
-                dist = (dx ** 2 + dy ** 2) ** 0.5
+                dist = (dx**2 + dy**2) ** 0.5
                 targets["vertex_dist"][i, center_y_int, center_x_int] = dist
 
         return targets
 
-    def _add_gaussian_heatmap(
-        self, heatmap: torch.Tensor, cx: float, cy: float, width: float, height: float
-    ):
+    def _add_gaussian_heatmap(self, heatmap: torch.Tensor, cx: float, cy: float, width: float, height: float):
         """Add Gaussian heatmap for an object center."""
-        
         # Integer center location
         cx_int = int(cx)
         cy_int = int(cy)
-        
+
         # Bounds check
         if not (0 <= cx_int < heatmap.shape[1] and 0 <= cy_int < heatmap.shape[0]):
             return
-        
+
         # Calculate sigma based on object size (with minimum)
         sigma_x = max(0.6 * width / 6.0, 1.0)  # Minimum sigma = 1
         sigma_y = max(0.6 * height / 6.0, 1.0)
-        
+
         # Determine the Gaussian radius (how far to compute)
         # Use 3-sigma rule: 99.7% of values within 3 sigma
         radius_x = int(3 * sigma_x)
         radius_y = int(3 * sigma_y)
-        
+
         # Compute Gaussian only in local region (more efficient)
         y_min = max(0, cy_int - radius_y)
         y_max = min(heatmap.shape[0], cy_int + radius_y + 1)
         x_min = max(0, cx_int - radius_x)
         x_max = min(heatmap.shape[1], cx_int + radius_x + 1)
-        
+
         # Create local coordinate grids CENTERED on integer location
         y_coords = torch.arange(y_min, y_max, dtype=torch.float32)
         x_coords = torch.arange(x_min, x_max, dtype=torch.float32)
         yy, xx = torch.meshgrid(y_coords, x_coords, indexing="ij")
-        
+
         # Compute Gaussian centered on INTEGER center (not float!)
         # This ensures the peak is exactly 1.0 at (cx_int, cy_int)
-        gaussian = torch.exp(
-            -((xx - cx_int) ** 2 / (2 * sigma_x ** 2) + 
-            (yy - cy_int) ** 2 / (2 * sigma_y ** 2))
-        )
-        
+        gaussian = torch.exp(-((xx - cx_int) ** 2 / (2 * sigma_x**2) + (yy - cy_int) ** 2 / (2 * sigma_y**2)))
+
         # Update heatmap with element-wise maximum
-        heatmap[y_min:y_max, x_min:x_max] = torch.maximum(
-            heatmap[y_min:y_max, x_min:x_max], 
-            gaussian
-        )
+        heatmap[y_min:y_max, x_min:x_max] = torch.maximum(heatmap[y_min:y_max, x_min:x_max], gaussian)
 
     def _encode_orientation(self, alpha: float) -> torch.Tensor:
         """Encode orientation angle into multi-bin format.
@@ -215,7 +206,7 @@ class TargetGenerator:
         Multi-Bin encoding (2 bins):
         - Bin 0: α ∈ [-π, 0], center = -π/2
         - Bin 1: α ∈ [0, π], center = +π/2
-        
+
         Output format: [conf_0, conf_1, sin_0, cos_0, sin_1, cos_1, pad, pad]
 
         Args:
@@ -228,7 +219,7 @@ class TargetGenerator:
         assert -np.pi <= alpha <= np.pi, f"alpha is out of range: {alpha}, {math.degrees(alpha)}"
         # Normalize alpha to [-π, π]
         alpha = math.atan2(math.sin(alpha), math.cos(alpha))
-        
+
         # Determine bin based on angle sign
         # Bin 0: [-π, 0), center = -π/2
         # Bin 1: [0, π], center = +π/2
@@ -238,21 +229,21 @@ class TargetGenerator:
         else:
             bin_idx = 1
             bin_center = math.pi / 2
-        
+
         # Compute residual angle within bin
         residual = alpha - bin_center
-        
+
         # Initialize encoding
         encoding = torch.zeros(8)
-        
+
         # Set bin confidence (one-hot)
         encoding[0] = 1.0 if bin_idx == 0 else 0.0
         encoding[1] = 1.0 if bin_idx == 1 else 0.0
-        
+
         # Set sin/cos for the ACTIVE bin only
         sin_val = math.sin(residual)
         cos_val = math.cos(residual)
-        
+
         if bin_idx == 0:
             encoding[2] = sin_val  # sin_0
             encoding[3] = cos_val  # cos_0
@@ -261,8 +252,7 @@ class TargetGenerator:
             # encoding[2:4] stays 0 for inactive bin
             encoding[4] = sin_val  # sin_1
             encoding[5] = cos_val  # cos_1
-        
-        # Channels 6-7 are padding (remain 0)
-        
-        return encoding
 
+        # Channels 6-7 are padding (remain 0)
+
+        return encoding
