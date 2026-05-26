@@ -2,7 +2,7 @@
 # Ultralytics 🚀 AGPL-3.0 License - https://ultralytics.com/license
 
 """
-KITTI to YOLO 3D Stereo Format Converter
+KITTI to YOLO 3D Stereo Format Converter.
 
 This script converts KITTI dataset to YOLO 3D stereo format with 19 values per object:
 class x_l y_l w_l h_l x_r w_r dim_h dim_w dim_l alpha v1_x v1_y v2_x v2_y v3_x v3_y v4_x v4_y
@@ -48,7 +48,7 @@ SPLIT_MAP = {"training": "train", "testing": "val"}
 
 
 class KITTIToYOLO3D:
-    """Convert KITTI dataset to YOLO 3D Stereo format with directory layout:
+    """Convert KITTI dataset to YOLO 3D Stereo format with directory layout:.
 
     root/
         images/{train|val}/left/*.png
@@ -65,7 +65,7 @@ class KITTIToYOLO3D:
         Args:
             kitti_root: Path to KITTI dataset root
             output_root: Path to output directory
-            filter_classes: List of class names to include (None = include all)
+            filter_classes: List of class names to include (None = include all).
         """
         self.kitti_root = Path(kitti_root)
         self.output_root = Path(output_root)
@@ -89,7 +89,7 @@ class KITTIToYOLO3D:
         # Split strategy: 'single' (original behavior) or '3dop' (fixed train/val split on training set indices)
         self.split_strategy = split_strategy
 
-    # Filter classes (if specified)
+        # Filter classes (if specified)
         self.filter_classes = filter_classes
         self.class_id_remap = None  # Will store remapping from original to new IDs
         if self.filter_classes is not None:
@@ -123,13 +123,12 @@ class KITTIToYOLO3D:
             (self.output_root / parent).mkdir(parents=True, exist_ok=True)
 
     def parse_calibration(self, calib_file):
-        """
-        Parse KITTI calibration file.
+        """Parse KITTI calibration file.
 
         Returns:
             dict with fx, fy, cx, cy, baseline, P2, P3
         """
-        with open(calib_file, "r") as f:
+        with open(calib_file) as f:
             lines = f.readlines()
 
         # Parse projection matrices
@@ -163,8 +162,7 @@ class KITTIToYOLO3D:
         }
 
     def compute_bottom_vertices(self, X, Y, Z, h, w, l, ry, calib):
-        """
-        Compute 4 bottom vertices of 3D box projected to left image.
+        """Compute 4 bottom vertices of 3D box projected to left image.
 
         Args:
             X, Y, Z: 3D location (bottom center) in camera coords
@@ -211,8 +209,7 @@ class KITTIToYOLO3D:
         return np.array(corners_2d)
 
     def compute_right_box(self, X, Y, Z, h, w, l, ry, calib, left_box_2d):
-        """
-        Compute right image 2D box by projecting 3D box.
+        """Compute right image 2D box by projecting 3D box.
 
         Returns:
             center_x_r, width_r (in pixels)
@@ -255,7 +252,7 @@ class KITTIToYOLO3D:
 
         if len(corners_2d_right) == 0:
             # Fallback: simple disparity-based calculation
-            x1_l, y1_l, x2_l, y2_l = left_box_2d
+            x1_l, _y1_l, x2_l, _y2_l = left_box_2d
             center_x_l = (x1_l + x2_l) / 2
             disparity = (calib["fx"] * calib["baseline"]) / Z
             center_x_r = center_x_l - disparity
@@ -274,8 +271,7 @@ class KITTIToYOLO3D:
         return center_x_r, width_r
 
     def convert_label(self, label_file, calib_file):
-        """
-        Convert single KITTI label file to YOLO 3D format.
+        """Convert single KITTI label file to YOLO 3D format.
 
         Returns:
             List of label strings
@@ -285,7 +281,7 @@ class KITTIToYOLO3D:
 
         calib = self.parse_calibration(calib_file)
 
-        with open(label_file, "r") as f:
+        with open(label_file) as f:
             lines = f.readlines()
 
         yolo_labels = []
@@ -312,8 +308,8 @@ class KITTIToYOLO3D:
                 class_id = self.class_id_remap[class_id]
 
             # Parse KITTI label fields
-            truncated = float(parts[1])
-            occluded = int(parts[2])
+            float(parts[1])
+            int(parts[2])
             alpha = float(parts[3])
 
             # 2D bounding box (left image)
@@ -348,7 +344,9 @@ class KITTIToYOLO3D:
             height_l_norm = height_l / self.img_height
 
             # ===== Right 2D Box (normalized) =====
-            center_x_r, width_r = self.compute_right_box(X, Y, Z, h, w, l, rotation_y, calib, left_box_2d=[x1, y1, x2, y2])
+            center_x_r, width_r = self.compute_right_box(
+                X, Y, Z, h, w, l, rotation_y, calib, left_box_2d=[x1, y1, x2, y2]
+            )
 
             center_x_r_norm = center_x_r / self.img_width
             width_r_norm = width_r / self.img_width
@@ -402,13 +400,13 @@ class KITTIToYOLO3D:
 
         Args:
             split: 'training' or 'testing'
-        Behavior:
+            Behavior:
             - 'single' strategy: mirrors KITTI splits to train/val.
             - '3dop' strategy: when split=='training', internally slices indices 0-3711 -> train, 3712-end -> val.
         """
-        LOGGER.info(f"\n{'='*60}")
+        LOGGER.info(f"\n{'=' * 60}")
         LOGGER.info(f"Converting KITTI {split} split (strategy={self.split_strategy})")
-        LOGGER.info(f"{'='*60}\n")
+        LOGGER.info(f"{'=' * 60}\n")
 
         # Paths
         image_2_dir = self.kitti_root / split / "image_2"
@@ -482,7 +480,12 @@ class KITTIToYOLO3D:
         split_name = SPLIT_MAP.get(split, split)
 
         # Ensure directories exist
-        for d in [f"images/{split_name}/left", f"images/{split_name}/right", f"labels/{split_name}", f"calib/{split_name}"]:
+        for d in [
+            f"images/{split_name}/left",
+            f"images/{split_name}/right",
+            f"labels/{split_name}",
+            f"calib/{split_name}",
+        ]:
             (self.output_root / d).mkdir(parents=True, exist_ok=True)
 
         index_list = []
@@ -562,18 +565,20 @@ class KITTIToYOLO3D:
             yaml_lines.append(f"train: {train_ref}")
         if val_ref:
             yaml_lines.append(f"val: {val_ref}")
-        yaml_lines.extend([
-            "# Classes",
-            "names:",
-            names_section,
-            "# Dataset info",
-            f"nc: {num_classes}  # number of classes",
-            "stereo: true",
-            "image_size: [375, 1242]  # height, width",
-            "# Calibration",
-            "baseline: 0.54  # meters (approximate)",
-            "focal_length: 721.5  # pixels (approximate)",
-        ])
+        yaml_lines.extend(
+            [
+                "# Classes",
+                "names:",
+                names_section,
+                "# Dataset info",
+                f"nc: {num_classes}  # number of classes",
+                "stereo: true",
+                "image_size: [375, 1242]  # height, width",
+                "# Calibration",
+                "baseline: 0.54  # meters (approximate)",
+                "focal_length: 721.5  # pixels (approximate)",
+            ]
+        )
         yaml_content = "\n".join(yaml_lines) + "\n"
 
         yaml_file = self.output_root / "dataset.yaml"
