@@ -352,6 +352,7 @@ class BaseTrainer:
                 self.model,
                 device_ids=[RANK],
                 static_graph=bool(self.args.compile),
+                broadcast_buffers=False
             )
 
         # Batch size
