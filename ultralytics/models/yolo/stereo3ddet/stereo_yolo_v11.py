@@ -1,20 +1,18 @@
 """
 YOLOv11 Stereo 3D Detection - Complete Implementation
-A stereo 3D detection network based on Stereo CenterNet
+A stereo 3D detection network based on Stereo CenterNet.
 """
 
 from __future__ import annotations
-
-from typing import Dict, Tuple, Optional, List
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-
 # ============================================================================
 # Part 1: Feature Fusion Layer
 # ============================================================================
+
 
 class StereoFeatureFusion(nn.Module):
     """Stereo feature fusion module."""
@@ -31,9 +29,10 @@ class StereoFeatureFusion(nn.Module):
         """
         Args:
             left_feat: [B, C, H, W]
-            right_feat: [B, C, H, W]
+            right_feat: [B, C, H, W].
+
         Returns:
-            fused: [B, C_out, H, W]
+            fused: [B, C_out, H, W].
         """
         concat_feat = torch.cat([left_feat, right_feat], dim=1)
         fused = self.fusion_conv(concat_feat)
@@ -43,6 +42,7 @@ class StereoFeatureFusion(nn.Module):
 # ============================================================================
 # Part 2: Neck (FPN-style Feature Pyramid)
 # ============================================================================
+
 
 class StereoPAN(nn.Module):
     """Stereo Path Aggregation Network (PAN)."""
@@ -84,12 +84,13 @@ class StereoPAN(nn.Module):
             ]
         )
 
-    def forward(self, features: List[torch.Tensor]) -> List[torch.Tensor]:
+    def forward(self, features: list[torch.Tensor]) -> list[torch.Tensor]:
         """
         Args:
             features: [P3, P4, P5] multi-scale features from backbone
+
         Returns:
-            [P3_out, P4_out, P5_out]
+            [P3_out, P4_out, P5_out].
         """
         # Simplified: only handle P3 (primary detection layer).
         # In practice, handle multiple levels.
@@ -99,6 +100,7 @@ class StereoPAN(nn.Module):
 # ============================================================================
 # Part 3: Detection Head (10 branches)
 # ============================================================================
+
 
 class StereoCenterNetHead(nn.Module):
     """Stereo CenterNet detection head with 10 parallel branches."""
@@ -128,16 +130,16 @@ class StereoCenterNetHead(nn.Module):
                 "vertex_dist": self._build_branch(in_channels, 4),
             }
         )
-        
+
         # Initialize heatmap branch bias for focal loss (bias=-2.19 gives sigmoid(-2.19) ≈ 0.1)
         self._init_heatmap_bias()
-    
+
     def _init_heatmap_bias(self):
         """Initialize heatmap branch bias to -2.19 for focal loss prior."""
         heatmap_branch = self.branches["heatmap"]
         # Get the final conv layer (1x1 conv)
         final_conv = heatmap_branch[-1]
-        if hasattr(final_conv, 'bias') and final_conv.bias is not None:
+        if hasattr(final_conv, "bias") and final_conv.bias is not None:
             nn.init.constant_(final_conv.bias, -2.19)
 
     def _build_shared_head(self, in_channels: int) -> nn.Sequential:
@@ -160,12 +162,13 @@ class StereoCenterNetHead(nn.Module):
             nn.Conv2d(256, out_channels, 1, 1, 0),
         )
 
-    def forward(self, x: torch.Tensor) -> Dict[str, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
         """
         Args:
             x: [B, C, H, W] fused features from the neck
+
         Returns:
-            Dict of 10 branch outputs
+            Dict of 10 branch outputs.
         """
         # Shared feature extraction
         shared_feat = self.shared_head(x)  # [B, 256, H, W]
@@ -181,6 +184,7 @@ class StereoCenterNetHead(nn.Module):
 # ============================================================================
 # Part 4: Loss Functions
 # ============================================================================
+
 
 class StereoCenterNetLoss(nn.Module):
     """Total loss for Stereo CenterNet."""
@@ -203,13 +207,13 @@ class StereoCenterNetLoss(nn.Module):
             "vertex_dist": 1.0,
         }
 
-    def forward(self, predictions: Dict, targets: Dict) -> Tuple[torch.Tensor, Dict]:
-        """
-        Compute the loss for each branch.
+    def forward(self, predictions: dict, targets: dict) -> tuple[torch.Tensor, dict]:
+        """Compute the loss for each branch.
 
         Args:
             predictions: Dict of network outputs
             targets: Dict of ground truth targets
+
         Returns:
             (total_loss, loss_dict)
         """
@@ -271,55 +275,55 @@ class StereoCenterNetLoss(nn.Module):
         total_loss = sum(self.loss_weights[k] * v for k, v in losses.items())
 
         return total_loss, losses
-    
-    def centernet_focal_loss(self, pred: torch.Tensor, target: torch.Tensor, 
-                          alpha: float = 2.0, beta: float = 4.0) -> torch.Tensor:
-        """
-        CenterNet-style Focal Loss for heatmap regression.
-        
+
+    def centernet_focal_loss(
+        self, pred: torch.Tensor, target: torch.Tensor, alpha: float = 2.0, beta: float = 4.0
+    ) -> torch.Tensor:
+        """CenterNet-style Focal Loss for heatmap regression.
+
         Paper Equation 1:
         - For positive locations (Y=1): (1 - Ŷ)^α * log(Ŷ)
         - For negative locations (Y<1): (1 - Y)^β * Ŷ^α * log(1 - Ŷ)
-        
+
         Args:
             pred: [B, C, H, W] - raw network output (before sigmoid)
             target: [B, C, H, W] - Gaussian heatmap target [0, 1]
             alpha: focusing parameter (default 2)
             beta: down-weighting factor for negatives near centers (default 4)
-        
+
         Returns:
             Scalar loss value
         """
         # Apply sigmoid to get probabilities [0, 1]
         pred = torch.sigmoid(pred)
-        
+
         # Numerical stability - clamp predictions
         pred = torch.clamp(pred, min=1e-4, max=1 - 1e-4)
-        
+
         # Identify positive locations (peak of Gaussian, Y = 1)
         pos_mask = target.eq(1).float()
         neg_mask = target.lt(1).float()
-        
+
         # Count number of positive samples for normalization
         num_pos = pos_mask.sum()
         # debug
         assert num_pos > 0, "No positive samples found"
         num_pos = torch.clamp(num_pos, min=1.0)  # Avoid division by zero
-        
+
         # Positive loss: (1 - Ŷ)^α * log(Ŷ)
         pos_loss = torch.pow(1 - pred, alpha) * torch.log(pred) * pos_mask
-        
+
         # Negative loss: (1 - Y)^β * Ŷ^α * log(1 - Ŷ)
         # The (1 - Y)^β term down-weights locations near object centers
         neg_loss = torch.pow(1 - target, beta) * torch.pow(pred, alpha) * torch.log(1 - pred) * neg_mask
-        
+
         # Sum and normalize by number of positive samples
         loss = -(pos_loss.sum() + neg_loss.sum()) / num_pos
-        
+
         return loss
 
     def masked_l1_loss(
-        self, pred: torch.Tensor, target: torch.Tensor, mask: Optional[torch.Tensor] = None
+        self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor | None = None
     ) -> torch.Tensor:
         """Smooth L1 loss with optional mask."""
         loss = F.smooth_l1_loss(pred, target, reduction="none")
@@ -352,7 +356,7 @@ class StereoCenterNetLoss(nn.Module):
         return loss
 
     def right_width_loss(
-        self, pred: torch.Tensor, target: torch.Tensor, mask: Optional[torch.Tensor] = None
+        self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor | None = None
     ) -> torch.Tensor:
         """Special loss for right-box width (with sigmoid transform)."""
         # Apply sigmoid transform: wr = 1/σ(ŵr) - 1
@@ -378,10 +382,9 @@ class StereoCenterNetLoss(nn.Module):
         return loss
 
     def orientation_loss(
-        self, pred: torch.Tensor, target: torch.Tensor, mask: Optional[torch.Tensor] = None
+        self, pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor | None = None
     ) -> torch.Tensor:
-        """
-        Orientation angle loss (Multi-Bin encoding).
+        """Orientation angle loss (Multi-Bin encoding).
 
         pred: [B, 8, H, W]
             layout: [bin_logit_1, bin_logit_2, sin_1, cos_1, sin_2, cos_2, pad, pad]
@@ -408,24 +411,24 @@ class StereoCenterNetLoss(nn.Module):
         # angle_pred: [B, 4, H, W] contains [sin1, cos1, sin2, cos2]
         # Bin 0: sin at index 0, cos at index 1
         # Bin 1: sin at index 2, cos at index 3
-        
+
         # Create indices to gather sin/cos for active bin
         # For each (b, h, w), get sin/cos indices: bin0 -> [0, 1], bin1 -> [2, 3]
         sin_indices = bin_target * 2  # [B, H, W] - 0 for bin0, 2 for bin1
         cos_indices = bin_target * 2 + 1  # [B, H, W] - 1 for bin0, 3 for bin1
-        
+
         # Gather sin/cos predictions for active bin using torch.gather
         # angle_pred: [B, 4, H, W], indices: [B, H, W] -> need [B, 1, H, W] for gather
         sin_indices_expanded = sin_indices.unsqueeze(1)  # [B, 1, H, W]
         cos_indices_expanded = cos_indices.unsqueeze(1)  # [B, 1, H, W]
-        
+
         sin_pred_active = torch.gather(angle_pred, dim=1, index=sin_indices_expanded).squeeze(1)  # [B, H, W]
         cos_pred_active = torch.gather(angle_pred, dim=1, index=cos_indices_expanded).squeeze(1)  # [B, H, W]
-        
+
         # Gather sin/cos targets for active bin
         sin_target_active = torch.gather(angle_target, dim=1, index=sin_indices_expanded).squeeze(1)  # [B, H, W]
         cos_target_active = torch.gather(angle_target, dim=1, index=cos_indices_expanded).squeeze(1)  # [B, H, W]
-        
+
         # Compute L1 loss on active bin's sin/cos residual
         sin_loss = F.l1_loss(sin_pred_active, sin_target_active, reduction="none")
         cos_loss = F.l1_loss(cos_pred_active, cos_target_active, reduction="none")
@@ -462,12 +465,12 @@ class UncertaintyWeightedLoss(nn.Module):
         super().__init__()
         self.log_vars = nn.ParameterList([nn.Parameter(torch.zeros(1)) for _ in range(num_tasks)])
 
-    def forward(self, losses: Dict[str, torch.Tensor]) -> torch.Tensor:
-        """
-        L_total = Σ_i (exp(-log_var_i) * L_i + log_var_i)
+    def forward(self, losses: dict[str, torch.Tensor]) -> torch.Tensor:
+        """L_total = Σ_i (exp(-log_var_i) * L_i + log_var_i).
 
         Args:
             losses: Dict of individual task losses
+
         Returns:
             total weighted loss
         """
@@ -485,6 +488,7 @@ class UncertaintyWeightedLoss(nn.Module):
 # ============================================================================
 # Part 5: Full Model
 # ============================================================================
+
 
 class StereoYOLOv11(nn.Module):
     """YOLOv11 Stereo 3D Detection - Full model."""
@@ -543,10 +547,9 @@ class StereoYOLOv11(nn.Module):
         self,
         left_img: torch.Tensor,
         right_img: torch.Tensor,
-        targets: Optional[Dict] = None,
-    ) -> Tuple[Dict, Optional[torch.Tensor]]:
-        """
-        Full forward pass.
+        targets: dict | None = None,
+    ) -> tuple[dict, torch.Tensor | None]:
+        """Full forward pass.
 
         Args:
             left_img: [B, 3, H, W]
@@ -600,7 +603,7 @@ class StereoYOLOv11Wrapper(nn.Module):
     def forward(
         self,
         x,
-        targets: Optional[Dict] = None,
+        targets: dict | None = None,
         augment: bool = False,
         visualize=False,
         embed=None,
@@ -608,7 +611,7 @@ class StereoYOLOv11Wrapper(nn.Module):
         **kwargs,
     ):
         """Accepts either a tensor [B,6,H,W] or a dict with keys 'img' and optional 'targets'.
-        
+
         Args:
             x: Input tensor [B,6,H,W] or dict with 'img' key.
             targets: Optional ground truth targets for training.
@@ -659,15 +662,15 @@ class StereoYOLOv11Wrapper(nn.Module):
 
     def loss(self, batch, preds=None):
         """Compute loss for validation.
-        
+
         This method is called by BaseValidator during validation to compute loss.
         It extracts labels from batch, converts them to targets format, computes
         predictions if needed, and returns (total_loss, loss_items) tuple.
-        
+
         Args:
             batch: Dict with 'img' (6-channel tensor [B, 6, H, W]) and 'labels' (list of label dicts per image).
             preds: Optional precomputed predictions dict with 10 branch outputs.
-            
+
         Returns:
             Tuple of (total_loss, loss_items) where:
                 - total_loss: Scalar tensor with total loss value
@@ -678,22 +681,22 @@ class StereoYOLOv11Wrapper(nn.Module):
         # Extract inputs from batch (T131)
         img = batch.get("img")
         labels_list = batch.get("labels", [])
-        
+
         if img is None:
             raise ValueError("batch must contain 'img' key with 6-channel tensor")
-        
+
         # Split img into left and right (T132)
         assert img.shape[1] == 6, "StereoYOLOv11Wrapper expects a 6-channel input (left+right)."
-        left = img[:, 0:3, :, :]
-        right = img[:, 3:6, :, :]
-        
+        img[:, 0:3, :, :]
+        img[:, 3:6, :, :]
+
         # Get image size for TargetGenerator
-        _, _, h, w = img.shape
+        _, _, h, _w = img.shape
         imgsz = h  # Assuming square images
-        
+
         # Import TargetGenerator and initialize it (T133)
         from ultralytics.data.stereo.target import TargetGenerator
-        
+
         # Initialize target generator if not already done
         if not hasattr(self, "_target_generator"):
             num_classes = len(self.names) if isinstance(self.names, dict) else 3
@@ -704,18 +707,15 @@ class StereoYOLOv11Wrapper(nn.Module):
                 output_size=(output_h, output_w),
                 num_classes=num_classes,
             )
-        
+
         # Convert labels to targets format (T134)
         targets_list = []
         for labels in labels_list:
-            target = self._target_generator.generate_targets(
-                labels,
-                input_size=(imgsz, imgsz)
-            )
+            target = self._target_generator.generate_targets(labels, input_size=(imgsz, imgsz))
             # Move to same device as img
             target = {k: v.to(img.device) for k, v in target.items()}
             targets_list.append(target)
-        
+
         # Stack targets across batch dimension (T135)
         # Each target is a dict with tensors of shape [C, H, W]
         # We need to stack to [B, C, H, W]
@@ -740,21 +740,21 @@ class StereoYOLOv11Wrapper(nn.Module):
                 "vertex_offset": torch.zeros(img.shape[0], 8, output_h, output_w, device=img.device),
                 "vertex_dist": torch.zeros(img.shape[0], 4, output_h, output_w, device=img.device),
             }
-        
+
         # Compute predictions if needed (T136)
         if preds is None:
             # Call forward to get predictions
             preds = self.forward(img)
-        
+
         # Ensure preds is in dict format
         if not isinstance(preds, dict):
             # If forward returned a tensor or other format, we need to handle it
             # For now, assume forward returns dict with 10 branch keys
             raise TypeError(f"Expected preds to be dict, got {type(preds)}")
-        
+
         # Compute loss (T137)
         total_loss, loss_dict = self.core.criterion(preds, batched_targets)
-        
+
         # Convert loss_dict to loss_items tensor in fixed order (T138)
         loss_items_list = [
             loss_dict.get("heatmap", torch.tensor(0.0, device=total_loss.device)),
@@ -769,44 +769,42 @@ class StereoYOLOv11Wrapper(nn.Module):
             loss_dict.get("vertex_dist", torch.tensor(0.0, device=total_loss.device)),
         ]
         loss_items = torch.stack(loss_items_list)  # [10]
-        
+
         # Return tuple (T139)
         return total_loss, loss_items
 
     def fuse(self, verbose=True):
         """Fuse Conv2d and BatchNorm2d layers for optimized inference.
-        
+
         This method fuses BatchNorm layers into Conv2d layers to improve inference speed.
         For StereoYOLOv11Wrapper, we perform basic fusion on the core model's modules.
-        
+
         Args:
             verbose (bool): Whether to print fusion information.
-            
+
         Returns:
             (nn.Module): Self (for method chaining).
         """
-        from ultralytics.utils.torch_utils import fuse_conv_and_bn
-        
         # Check if already fused
         if self.is_fused():
             if verbose:
                 print("Model is already fused.")
             return self
-        
+
         # Fuse BatchNorm layers in the core model
         # This is a simplified fusion - for full compatibility, we would need
         # to handle module replacement more carefully
         if verbose:
             print("Model fusion completed (simplified - BatchNorm layers remain for compatibility).")
-        
+
         return self
 
     def is_fused(self, thresh=10):
         """Check if the model has less than a certain threshold of BatchNorm layers.
-        
+
         Args:
             thresh (int): Threshold number of BatchNorm layers.
-            
+
         Returns:
             (bool): True if number of BatchNorm layers < thresh.
         """
