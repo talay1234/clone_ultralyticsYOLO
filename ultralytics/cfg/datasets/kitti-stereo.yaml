@@ -16,7 +16,7 @@
 # Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
 # NOTE: Overridden to use pre-converted dataset; no downloads.
 path: /root/autodl-tmp/converted_kitti_3dop # dataset root dir (pre-converted, skip downloads)
-train: images/train/left # train images (left stereo) (relative to 'path') 
+train: images/train/left # train images (left stereo) (relative to 'path')
 val: images/val/left # val images (left stereo) (relative to 'path')
 
 # Stereo image pairs (optional, for stereo-based 3D detection)
@@ -39,16 +39,16 @@ download: |
   import os
   import shutil
   from pathlib import Path
-  
+
   from ultralytics.utils import LOGGER, TQDM
   from ultralytics.utils.downloads import download, safe_download
-  
+
     # Early exit: if converted dataset already exists at yaml["path"], skip any download/convert
     dir = Path(yaml["path"]).resolve()
     if (dir / "images" / "train" / "left").exists():
             LOGGER.info(f"Using existing KITTI Stereo dataset at: {dir} (skipping download/convert)")
             raise SystemExit(0)
-  
+
   def convert_kitti_to_yolo_stereo(kitti_root: Path, output_dir: Path, split: str = "training"):
       """Convert KITTI dataset to YOLO format with stereo support.
       
@@ -133,8 +133,8 @@ download: |
               shutil.copy2(calib_file, output_dir / "calib" / "val" / f"{img_id}.txt")
       
       LOGGER.info(f"Conversion complete! Train: {len(train_left)}, Val: {len(val_left)}")
-  
-  
+
+
   def convert_kitti_label_to_yolo(kitti_label: Path, yolo_label: Path, img_path: Path, calib_file: Path = None):
       """Convert KITTI label format to stereo 3D detection format.
       
@@ -320,17 +320,17 @@ download: |
       # Write output label
       with open(yolo_label, "w") as f:
           f.writelines(yolo_lines)
-  
-  
+
+
     # Main download and conversion logic
     # (Only reached if early-exit above did not trigger)
     dir = Path(yaml["path"])  # dataset root dir
-  
+
   LOGGER.info("=" * 60)
   LOGGER.info("KITTI Stereo Dataset Download and Conversion")
   LOGGER.info("=" * 60)
   LOGGER.info("")
-  
+
   # KITTI dataset S3 URLs
   kitti_urls = {
       "image_2": "https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_image_2.zip",  # left images
@@ -338,7 +338,7 @@ download: |
       "label_2": "https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_label_2.zip",  # labels
       "calib": "https://s3.eu-central-1.amazonaws.com/avg-kitti/data_object_calib.zip",  # calibration
   }
-  
+
   def reorganize_kitti_structure(root_path: Path):
       """Reorganize KITTI files if they were extracted to wrong locations.
       
@@ -395,7 +395,7 @@ download: |
                           shutil.rmtree(src_dir.parent.parent)
                   except:
                       pass
-  
+
   def check_files_exist(root_path: Path) -> bool:
       """Check if KITTI files are already downloaded (as zip or extracted)."""
       # Check for zip files
@@ -417,7 +417,7 @@ download: |
           return True
       
       return False
-  
+
   # Check for KITTI_ROOT environment variable or use default
   kitti_root = os.getenv("KITTI_ROOT")
   if kitti_root:
@@ -445,22 +445,22 @@ download: |
                   kitti_root = p
                   LOGGER.info(f"Found KITTI dataset at: {kitti_root}")
                   break
-  
+
   # Set default location if not found
   if kitti_root is None:
       kitti_root = dir.parent / "kitti_raw"
-  
+
   kitti_root.mkdir(parents=True, exist_ok=True)
-  
+
   # Check if files already exist
   files_exist = check_files_exist(kitti_root)
   correct_structure = (kitti_root / "training" / "image_2").exists()
-  
+
   if files_exist and not correct_structure:
       LOGGER.info("Found downloaded files but in wrong structure. Reorganizing...")
       reorganize_kitti_structure(kitti_root)
       correct_structure = (kitti_root / "training" / "image_2").exists()
-  
+
   # Download and extract if not found
   if not files_exist:
       LOGGER.info("KITTI dataset not found. Downloading from S3...")
@@ -480,18 +480,17 @@ download: |
       LOGGER.info(f"Download and extraction complete! Dataset at: {kitti_root}")
   elif files_exist:
       LOGGER.info(f"Using existing KITTI dataset at: {kitti_root}")
-  
+
   # Verify KITTI structure
   if not (kitti_root / "training" / "image_2").exists():
       raise FileNotFoundError(f"KITTI training images not found at {kitti_root / 'training' / 'image_2'}. Please check the dataset structure.")
-  
+
   # Convert dataset
   LOGGER.info(f"Converting KITTI dataset from {kitti_root} to {dir}...")
   convert_kitti_to_yolo_stereo(kitti_root, dir, split="training")
-  
+
   LOGGER.info("")
   LOGGER.info("=" * 60)
   LOGGER.info("KITTI Stereo Dataset Conversion Complete!")
   LOGGER.info(f"Dataset saved to: {dir}")
   LOGGER.info("=" * 60)
-
