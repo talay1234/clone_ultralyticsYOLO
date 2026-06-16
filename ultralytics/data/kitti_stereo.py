@@ -14,8 +14,8 @@ from ultralytics.utils import LOGGER
 class KITTIStereoDataset:
     """Dataset class for loading KITTI stereo images, calibration, and labels.
 
-    This class loads stereo image pairs (left/right), calibration files, and YOLO 3D format labels
-    from a KITTI-style dataset structure.
+    This class loads stereo image pairs (left/right), calibration files, and YOLO 3D format labels from a KITTI-style
+    dataset structure.
 
     Attributes:
         root (Path): Root directory of the dataset.
@@ -35,7 +35,9 @@ class KITTIStereoDataset:
         >>> calib = sample["calib"]
     """
 
-    def __init__(self, root: str | Path, split: str = "train", filter_classes: bool = False, max_samples: int | None = None):
+    def __init__(
+        self, root: str | Path, split: str = "train", filter_classes: bool = False, max_samples: int | None = None
+    ):
         """Initialize KITTI Stereo Dataset.
 
         Args:
@@ -44,10 +46,10 @@ class KITTIStereoDataset:
                 - labels/{split}/
                 - calib/{split}/
             split (str): Dataset split, either 'train' or 'val'. Defaults to 'train'.
-            filter_classes (bool): If True, filter to only paper classes (Car, Pedestrian, Cyclist)
-                and remap class IDs from 0,3,5 to 0,1,2. Defaults to False.
-            max_samples (int | None): Maximum number of samples to load. If None, loads all available samples.
-                If specified, only the first max_samples samples will be loaded. Defaults to None.
+            filter_classes (bool): If True, filter to only paper classes (Car, Pedestrian, Cyclist) and remap class IDs
+                from 0,3,5 to 0,1,2. Defaults to False.
+            max_samples (int | None): Maximum number of samples to load. If None, loads all available samples. If
+                specified, only the first max_samples samples will be loaded. Defaults to None.
         """
         self.root = Path(root)
         self.split = split
@@ -120,7 +122,7 @@ class KITTIStereoDataset:
         Returns:
             dict[str, Any]: Dictionary containing intrinsics and (when available) matrices.
         """
-        with open(calib_file, "r") as f:
+        with open(calib_file) as f:
             lines = f.readlines()
 
         calib_dict = {}
@@ -222,7 +224,7 @@ class KITTIStereoDataset:
             from ultralytics.models.yolo.stereo3ddet.utils import filter_and_remap_class_id
 
         labels = []
-        with open(label_file, "r") as f:
+        with open(label_file) as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -274,10 +276,15 @@ class KITTIStereoDataset:
                         },
                     }
                     # assertion
-                    assert label_dict['alpha'] >= -np.pi and label_dict['alpha'] <= np.pi, f"alpha is out of range: {label_dict['alpha']}"
-                    assert 0.1 < label_dict['dimensions']['height'] < 5 and 0.1 < label_dict['dimensions']['width'] < 3 and 0.1 < label_dict['dimensions']['length'] < 20, f"dimensions are out of range: {label_dict['dimensions']}"
+                    assert label_dict["alpha"] >= -np.pi and label_dict["alpha"] <= np.pi, (
+                        f"alpha is out of range: {label_dict['alpha']}"
+                    )
+                    assert (
+                        0.1 < label_dict["dimensions"]["height"] < 5
+                        and 0.1 < label_dict["dimensions"]["width"] < 3
+                        and 0.1 < label_dict["dimensions"]["length"] < 20
+                    ), f"dimensions are out of range: {label_dict['dimensions']}"
 
-                    
                     # Store original class ID if filtering is enabled
                     if self.filter_classes:
                         label_dict["original_class_id"] = original_class_id
@@ -352,13 +359,12 @@ class KITTIStereoDataset:
 
 if __name__ == "__main__":
     """Test the KITTI Stereo Dataset dataloader."""
-    import sys
     import argparse
+    import sys
 
     parser = argparse.ArgumentParser(description="Test KITTI Stereo Dataset Dataloader")
     parser.add_argument("--root", type=str, default="kitti-stereo-debug", help="Root directory of the dataset")
     parser.add_argument("--split", type=str, default="train", help="Dataset split to use ('train' or 'val')")
-
 
     # Test dataset initialization
     print("=" * 60)
@@ -371,7 +377,7 @@ if __name__ == "__main__":
     try:
         # Initialize dataset
         dataset = KITTIStereoDataset(root=args.root, split=args.split)
-        print(f"✓ Dataset initialized successfully")
+        print("✓ Dataset initialized successfully")
         print(f"  - Dataset length: {len(dataset)}")
         print(f"  - Split: {dataset.split}")
         print(f"  - Root: {dataset.root}")
@@ -383,19 +389,19 @@ if __name__ == "__main__":
             print("-" * 60)
 
             sample = dataset[0]
-            print(f"✓ Sample loaded successfully")
+            print("✓ Sample loaded successfully")
             print(f"  - Image ID: {sample['image_id']}")
             print(f"  - Calibration file: {sample['calib_file']}")
 
             # Check images
-            print(f"\n  Images:")
+            print("\n  Images:")
             print(f"    - Left image shape: {sample['left_img'].shape}")
             print(f"    - Right image shape: {sample['right_img'].shape}")
             print(f"    - Left image dtype: {sample['left_img'].dtype}")
             print(f"    - Right image dtype: {sample['right_img'].dtype}")
 
             # Check calibration
-            print(f"\n  Calibration:")
+            print("\n  Calibration:")
             calib_keys = list(sample["calib"].keys())
             print(f"    - Calibration keys: {calib_keys}")
             if "fx" in sample["calib"]:
@@ -406,7 +412,7 @@ if __name__ == "__main__":
                 print(f"    - baseline: {sample['calib']['baseline']:.4f} m")
 
             # Check labels
-            print(f"\n  Labels:")
+            print("\n  Labels:")
             print(f"    - Number of labels: {len(sample['labels'])}")
             if sample["labels"]:
                 first_label = sample["labels"][0]
@@ -443,7 +449,7 @@ if __name__ == "__main__":
 
             try:
                 val_dataset = KITTIStereoDataset(root=args.root, split="val")
-                print(f"✓ Validation dataset initialized successfully")
+                print("✓ Validation dataset initialized successfully")
                 print(f"  - Validation dataset length: {len(val_dataset)}")
                 if len(val_dataset) > 0:
                     val_sample = val_dataset[0]
@@ -465,4 +471,3 @@ if __name__ == "__main__":
 
         traceback.print_exc()
         sys.exit(1)
-
