@@ -1713,7 +1713,7 @@ def guess_model_task(model):
         # Check for stereo flag first (highest priority)
         if cfg.get("stereo") is True:
             return "stereo3ddet"
-        
+
         m = cfg["head"][-1][-2].lower()  # output module name
         if m in {"classify", "classifier", "cls", "fc"}:
             return "classify"
